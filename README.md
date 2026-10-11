@@ -30,9 +30,8 @@ Recompiler le moteur (Rust, cible `wasm32-unknown-unknown`, `wasm-bindgen-cli` 0
 
 ## Publication
 
-GitHub Pages sert la branche `gh-pages`, qui contient seulement `web/` :
-
-    git subtree push --prefix web origin gh-pages
+Un push sur `main` qui touche `web/` déclenche `.github/workflows/pages.yml`.
+Le workflow publie `web/` sur GitHub Pages. Aucune branche de publication n'existe.
 
 ## Licence
 
