@@ -128,19 +128,6 @@
     </section>
   </main>
 
-  <dialog id="rename-dialog">
-    <form method="dialog" id="rename-form">
-      <h3>Changer le titre</h3>
-      <p class="hint" id="rename-hint">La Kindle affichera ce titre et cet auteur.</p>
-      <label>Titre <input name="title" required autocomplete="off"></label>
-      <label id="rename-author-row">Auteur <input name="author" autocomplete="off"></label>
-      <div class="actions">
-        <button class="btn" value="cancel" formnovalidate>Annuler</button>
-        <button class="btn primary" value="ok">Enregistrer</button>
-      </div>
-    </form>
-  </dialog>
-
   <dialog id="confirm-dialog">
     <form method="dialog">
       <h3 id="confirm-title">Confirmer</h3>
@@ -152,7 +139,6 @@
     </form>
   </dialog>
 
-  <input type="file" id="replace-input" accept=".epub,.kfx,.azw3,.mobi,.pdf,.txt" hidden>
   <div class="toast" id="toast" role="status" hidden></div>
 
   <footer class="foot">

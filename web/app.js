@@ -1,5 +1,4 @@
 import * as engine from './engine.js';
-import { retitle } from './epub.js';
 import { Kindle, extOf, kvGet, kvSet, permitted, safeFileName, stem, supported } from './kindle.js';
 
 const $ = (id) => document.getElementById(id);
@@ -17,7 +16,6 @@ const ui = {
   drop: $('drop'),
   pick: $('pick'),
   fileInput: $('file-input'),
-  replaceInput: $('replace-input'),
   format: $('format'),
   queue: $('queue'),
   count: $('count'),
@@ -26,10 +24,6 @@ const ui = {
   shelf: $('shelf'),
   empty: $('empty'),
   toast: $('toast'),
-  renameDialog: $('rename-dialog'),
-  renameForm: $('rename-form'),
-  renameHint: $('rename-hint'),
-  renameAuthorRow: $('rename-author-row'),
   confirmDialog: $('confirm-dialog'),
   confirmTitle: $('confirm-title'),
   confirmText: $('confirm-text'),
@@ -38,8 +32,6 @@ const ui = {
 
 /** Formats the Kindle reads natively, copied as is. */
 const NATIVE = new Set(['kfx', 'azw3', 'azw', 'mobi', 'prc', 'pdf', 'txt']);
-/** Formats whose title lives inside the file (renamed through a conversion). */
-const EMBEDDED_META = new Set(['kfx', 'azw3', 'azw', 'mobi', 'prc', 'epub']);
 const UNSUPPORTED = "Ce fichier n'est pas un livre que la Kindle sait lire. Choisis un fichier qui finit par .epub.";
 
 let kindle = null;
@@ -88,37 +80,6 @@ function confirmAction({ title, text, ok = 'Confirmer', danger = true }) {
   ui.confirmDialog.showModal();
   return new Promise((resolve) => {
     ui.confirmDialog.addEventListener('close', () => resolve(ui.confirmDialog.returnValue === 'ok'), { once: true });
-  });
-}
-
-function askTitle(book) {
-  const meta = metaCache.get(book.path);
-  const embedded = EMBEDDED_META.has(book.ext);
-  const fields = ui.renameForm.elements;
-  fields.title.value = meta?.title || stem(book.name);
-  fields.author.value = meta?.authors?.join(', ') || '';
-  ui.renameAuthorRow.hidden = !embedded;
-  ui.renameHint.textContent = embedded
-    ? 'La Kindle affichera ce titre et cet auteur.'
-    : 'La Kindle affichera ce titre.';
-  ui.renameDialog.returnValue = '';
-  ui.renameDialog.showModal();
-  fields.title.select();
-  return new Promise((resolve) => {
-    ui.renameDialog.addEventListener('close', () => {
-      if (ui.renameDialog.returnValue !== 'ok') return resolve(null);
-      resolve({ title: fields.title.value.trim(), author: fields.author.value.trim() });
-    }, { once: true });
-  });
-}
-
-function pickFile(input) {
-  input.value = '';
-  return new Promise((resolve) => {
-    const done = () => resolve(input.files?.[0] ?? null);
-    input.addEventListener('change', done, { once: true });
-    input.addEventListener('cancel', () => resolve(null), { once: true });
-    input.click();
   });
 }
 
@@ -259,21 +220,18 @@ function card(book) {
     </div>
     <p class="title"></p>
     <p class="author"></p>
-    <p class="unreadable" hidden>La Kindle ne peut pas encore ouvrir ce livre.</p>
+    <p class="unreadable" hidden>La Kindle ne peut pas ouvrir ce livre.</p>
     <div class="acts">
-      <button class="btn primary small convert" type="button" hidden>Rendre lisible</button>
-      <button class="btn small rename" type="button">Changer le titre</button>
+      <button class="btn small get" type="button"></button>
+      <button class="btn small get-epub" type="button" hidden>Télécharger en EPUB</button>
       <button class="btn small del" type="button">Supprimer</button>
-      <button class="link replace" type="button">Remplacer par un autre fichier</button>
     </div>`;
-  if (book.ext === 'epub') {
-    li.querySelector('.unreadable').hidden = false;
-    li.querySelector('.convert').hidden = false;
-  }
+  li.querySelector('.unreadable').hidden = book.ext !== 'epub';
+  li.querySelector('.get-epub').hidden = book.ext === 'epub' || !engine.READABLE.has(book.ext);
+  li.querySelector('.get').textContent = `Télécharger (${book.ext.toUpperCase()})`;
   li.querySelector('.placeholder').style.setProperty('--ph', PALETTE[hash(book.name) % PALETTE.length]);
-  li.querySelector('.convert').onclick = () => convertInPlace(book);
-  li.querySelector('.rename').onclick = () => rename(book);
-  li.querySelector('.replace').onclick = () => replace(book);
+  li.querySelector('.get').onclick = () => download(book, false);
+  li.querySelector('.get-epub').onclick = () => download(book, true);
   li.querySelector('.del').onclick = () => remove(book);
   fillCard(li, book);
   return li;
@@ -354,48 +312,37 @@ function job(name) {
   };
 }
 
-/**
- * Converts (if needed) and writes one book to the Kindle.
- * `replacing`: the book this one takes the place of, removed once the new one is ready.
- */
-async function install({ data, ext, fileName, replacing = null, meta = null, report }) {
+/** Converts (if needed) and writes one book to the Kindle. */
+async function install({ data, ext, fileName, report }) {
   const target = ui.format.value;
   let out = data;
   let outExt = ext;
   let info = null;
 
-  if (ext === 'epub' || meta) {
-    let epub = data;
-    if (ext !== 'epub') {
-      report.step('Ouverture du livre…');
-      epub = await engine.convert(data, ext, 'epub');
-    }
-    if (meta) epub = retitle(epub, { title: meta.title, author: meta.author });
-    info = await engine.inspect(epub, 'epub');
-    // A renamed KFX or AZW3 keeps its format; the rest goes to the chosen one.
-    outExt = meta && (ext === 'kfx' || ext === 'azw3') ? ext : target;
+  if (ext === 'epub') {
+    info = await engine.inspect(data, 'epub');
+    outExt = target;
     report.step('Préparation pour la Kindle…');
     try {
-      out = await engine.convert(epub, 'epub', outExt);
+      out = await engine.convert(data, 'epub', outExt);
     } catch (e) {
       if (outExt !== 'kfx') throw e;
       report.step('Préparation pour la Kindle (autre méthode)…');
       outExt = 'azw3';
-      out = await engine.convert(epub, 'epub', 'azw3');
+      out = await engine.convert(data, 'epub', 'azw3');
     }
-    data = epub;
   } else if (!NATIVE.has(ext)) {
     throw new Error(UNSUPPORTED);
   }
 
   const base = info
     ? [info.title || stem(fileName), info.authors.join(', ')].filter(Boolean).join(' - ')
-    : meta?.title || stem(fileName);
+    : stem(fileName);
   const name = safeFileName(base, outExt);
-  const dir = replacing?.dir ?? kindle.documents;
+  const dir = kindle.documents;
   let overwritten = null;
 
-  if (replacing?.name !== name && await kindle.exists(dir, name)) {
+  if (await kindle.exists(dir, name)) {
     const existing = books.find((b) => b.dir === dir && b.name === name);
     const ok = await confirmAction({
       title: 'Ce livre est déjà sur la Kindle',
@@ -410,7 +357,6 @@ async function install({ data, ext, fileName, replacing = null, meta = null, rep
   await kindle.write(dir, name, out);
   // Written first, so a failed copy never loses the old book.
   if (overwritten) await kindle.removeBook(overwritten, { keepFile: true });
-  if (replacing) await kindle.removeBook(replacing, { keepFile: replacing.name === name });
 
   const manifest = await kindle.manifest();
   const entry = { added: new Date().toISOString() };
@@ -420,8 +366,7 @@ async function install({ data, ext, fileName, replacing = null, meta = null, rep
       entry.thumbnail = await kindle.writeThumbnail(info.kfx_content_id, cover);
     }
   }
-  const prefix = dir === kindle.documents ? '' : replacing.path.slice(0, -replacing.name.length);
-  manifest.books[`${prefix}${name}`] = entry;
+  manifest.books[name] = entry;
   await kindle.saveManifest(manifest);
   return outExt;
 }
@@ -473,59 +418,33 @@ async function remove(book) {
   await refresh();
 }
 
-async function rename(book) {
-  const answer = await askTitle(book);
-  if (!answer?.title) return;
+function save(bytes, name) {
+  const url = URL.createObjectURL(new Blob([bytes]));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+async function download(book, asEpub) {
   setBusy(book, true);
-  const report = job(`Nouveau titre : ${answer.title}`);
   try {
-    if (EMBEDDED_META.has(book.ext)) {
-      const data = await kindle.read(book);
-      await install({ data, ext: book.ext, fileName: book.name, replacing: book, meta: answer, report });
-    } else {
-      const name = safeFileName(answer.title, book.ext);
-      if (name !== book.name) {
-        if (await kindle.exists(book.dir, name)) throw new Error(`« ${name} » existe déjà.`);
-        report.step('Copie sur la Kindle…');
-        await kindle.write(book.dir, name, await book.handle.getFile());
-        await kindle.removeBook(book);
-      }
+    let data = await kindle.read(book);
+    let name = book.name;
+    if (asEpub) {
+      data = await engine.convert(data, book.ext, 'epub');
+      name = `${stem(book.name)}.epub`;
     }
-    report.done('Titre changé ✓');
+    save(data, name);
   } catch (e) {
-    report.fail(errorText(e));
+    const text = asEpub && e?.name === 'Error'
+      ? "Ce livre ne peut pas être converti en EPUB. Il est peut-être protégé contre la copie."
+      : errorText(e);
+    toast(text, true);
+  } finally {
+    setBusy(book, false);
   }
-  await refresh();
-}
-
-async function replace(book) {
-  const file = await pickFile(ui.replaceInput);
-  if (!file) return;
-  const report = job(`Remplacement par ${file.name}`);
-  setBusy(book, true);
-  try {
-    const ext = extOf(file.name);
-    const data = new Uint8Array(await file.arrayBuffer());
-    const result = await install({ data, ext, fileName: file.name, replacing: book, report });
-    report.done(result === 'skipped' ? 'Pas remplacé' : 'Remplacé ✓');
-  } catch (e) {
-    report.fail(bookErrorText(e));
-  }
-  await refresh();
-}
-
-/** An EPUB copied by hand: convert it and swap it for the Kindle version. */
-async function convertInPlace(book) {
-  const report = job(stem(book.name));
-  setBusy(book, true);
-  try {
-    const data = await kindle.read(book);
-    const result = await install({ data, ext: 'epub', fileName: book.name, replacing: book, report });
-    report.done(result === 'skipped' ? 'Pas modifié' : 'Lisible sur la Kindle ✓');
-  } catch (e) {
-    report.fail(bookErrorText(e));
-  }
-  await refresh();
 }
 
 // --- Wiring ---------------------------------------------------------------

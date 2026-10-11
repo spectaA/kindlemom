@@ -8,7 +8,7 @@ Aucune installation, aucun serveur, aucun envoi de fichier.
 
 1. Ouvrir la page dans **Chrome** ou **Edge** (ordinateur).
 2. Brancher la Kindle, cliquer sur « Connecter ma Kindle » et choisir le disque Kindle.
-3. Déposer des EPUB. Renommer, remplacer ou supprimer depuis la bibliothèque.
+3. Déposer des EPUB. Depuis la bibliothèque : voir, télécharger (format Kindle ou EPUB) ou supprimer.
 4. Éjecter la Kindle.
 
 ## Fonctionnement
@@ -30,9 +30,10 @@ Recompiler le moteur (Rust, cible `wasm32-unknown-unknown`, `wasm-bindgen-cli` 0
 
 ## Publication
 
-Chaque push sur `main` publie `web/` sur GitHub Pages (dépôt public ;
-activer une fois Settings → Pages → Source : GitHub Actions).
+GitHub Pages sert la branche `gh-pages`, qui contient seulement `web/` :
+
+    git subtree push --prefix web origin gh-pages
 
 ## Licence
 
-GPL-3.0-or-later (comme boko). fflate : MIT.
+GPL-3.0-or-later (comme boko).
