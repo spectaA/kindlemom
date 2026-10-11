@@ -4,99 +4,134 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kindlemom</title>
-  <meta name="description" content="Gérer les livres de sa Kindle depuis le navigateur : EPUB convertis en KFX, localement.">
+  <meta name="description" content="Mettre des livres sur sa Kindle depuis le navigateur, en trois étapes.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='3' width='20' height='26' rx='3' fill='%231d1a16'/%3E%3Crect x='9' y='6' width='14' height='17' fill='%23f4efe6'/%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script type="module" src="app.js"></script>
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="./">
-      <span class="brand-mark" aria-hidden="true"></span>
-      Kindlemom
-    </a>
+    <a class="brand" href="./">Kindlemom</a>
     <div class="device" id="device" hidden>
-      <span class="dot" aria-hidden="true"></span>
-      <span id="device-label">Kindle connectée</span>
-      <button class="link" id="disconnect" type="button">Déconnecter</button>
+      <span>Kindle branchée : <b id="device-label">Kindle</b></span>
+      <button class="link" id="disconnect" type="button">Changer de Kindle</button>
     </div>
   </header>
 
   <main>
     <!-- Not connected -->
-    <section class="intro" id="intro">
-      <p class="eyebrow">Ta Kindle, sans câble de friction</p>
-      <h1>Glisse tes EPUB.<br><em>Ils arrivent en KFX.</em></h1>
-      <p class="lede">Branche ta Kindle en USB, choisis-la ici une seule fois, puis dépose tes livres.
-        La conversion se fait dans ton navigateur&nbsp;: rien n'est envoyé nulle part.</p>
+    <section id="intro">
 
-      <div class="cta">
-        <button class="btn primary big" id="connect" type="button">Connecter ma Kindle</button>
-        <button class="btn big" id="reconnect" type="button" hidden>Reprendre avec <span id="reconnect-name">ma Kindle</span></button>
+      <h1>Mettre des livres sur ta Kindle</h1>
+      <p class="lede">Il y a trois étapes. Suis-les dans l'ordre, une à la fois.</p>
+
+      <div class="warning" id="unsupported" hidden>
+        <p><strong>Cette page ne marche pas dans ce navigateur.</strong></p>
+        <p>Ouvre-la dans <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong>, sur un ordinateur.</p>
       </div>
 
-      <p class="warning" id="unsupported" hidden>
-        Ce navigateur ne permet pas d'écrire sur une clé USB. Ouvre cette page dans
-        <strong>Chrome</strong> ou <strong>Edge</strong> sur ordinateur.
-      </p>
+      <article class="step">
+        <h2>Étape 1 : brancher la Kindle</h2>
+        <ol class="todo">
+          <li>Branche la Kindle à l'ordinateur avec son câble.</li>
+          <li>Allume la Kindle et déverrouille l'écran.</li>
+          <li>Clique sur le grand bouton ci-dessous.</li>
+        </ol>
 
-      <ol class="steps">
-        <li><span>1</span><p>Branche la Kindle et déverrouille-la.</p></li>
-        <li><span>2</span><p>Clique sur «&nbsp;Connecter&nbsp;» et choisis le disque <strong>Kindle</strong> (la racine, pas le dossier documents).</p></li>
-        <li><span>3</span><p>Autorise la modification. Ensuite, dépose tes EPUB.</p></li>
-      </ol>
+        <div class="cta">
+          <button class="btn primary big" id="reconnect" type="button" hidden>Continuer avec <span id="reconnect-name">ma Kindle</span></button>
+          <button class="btn primary big" id="connect" type="button">Choisir ma Kindle</button>
+        </div>
+
+        <div class="next">
+          <p class="next-title">Ensuite, une fenêtre s'ouvre :</p>
+          <ol class="todo">
+            <li>Dans la colonne de gauche, clique sur <strong>Kindle</strong>.</li>
+            <li>Clique sur le bouton en bas de la fenêtre pour valider.</li>
+            <li>Chrome demande la permission de modifier les fichiers : <strong>accepte</strong>.</li>
+          </ol>
+        </div>
+      </article>
 
       <details class="help">
-        <summary>Ma Kindle n'apparaît pas comme un disque</summary>
-        <p>Les modèles sortis à partir de fin 2024 (Paperwhite 12<sup>e</sup> gén., Colorsoft…) se connectent en
-          MTP et non comme une clé USB. Ils ne sont pas encore pris en charge&nbsp;; c'est la prochaine étape.</p>
+        <summary>Ça ne marche pas ?</summary>
+        <dl>
+          <dt>« Kindle » n'apparaît pas dans la fenêtre</dt>
+          <dd>Débranche le câble, attends cinq secondes, puis rebranche-le. Vérifie que l'écran de la Kindle est déverrouillé.</dd>
+          <dt>Un message dit que ce n'est pas une Kindle</dt>
+          <dd>Tu as sans doute choisi un dossier à l'intérieur de la Kindle. Recommence et clique sur <strong>Kindle</strong> lui-même, pas sur un dossier.</dd>
+          <dt>La Kindle est récente (achetée après fin 2024)</dt>
+          <dd>Certains modèles récents ne s'affichent pas comme une clé USB. Ils ne marchent pas encore avec cette page.</dd>
+        </dl>
       </details>
     </section>
 
     <!-- Connected -->
-    <section class="library" id="library" hidden>
-      <div class="drop" id="drop">
-        <input type="file" id="file-input" accept=".epub,.kfx,.azw3,.mobi,.pdf,.txt" multiple hidden>
-        <div class="drop-art" aria-hidden="true">
-          <span></span><span></span><span></span>
+    <section id="library" hidden>
+
+      <article class="step">
+        <h2>Étape 2 : ajouter des livres</h2>
+        <div class="drop" id="drop">
+          <input type="file" id="file-input" accept=".epub,.kfx,.azw3,.mobi,.pdf,.txt" multiple hidden>
+          <button class="btn primary big" id="pick" type="button">Choisir des livres sur l'ordinateur</button>
+          <p>Ou fais glisser les livres dans ce cadre.</p>
         </div>
-        <div class="drop-text">
-          <h2>Dépose tes EPUB ici</h2>
-          <p>ou <button class="link strong" id="pick" type="button">choisis des fichiers</button>. Conversion automatique, puis copie sur la Kindle.</p>
+        <p class="tip">Les livres téléchargés se trouvent souvent dans le dossier <strong>Téléchargements</strong>.
+          Leur nom finit en général par <strong>.epub</strong>.</p>
+
+        <ul class="queue" id="queue" aria-live="polite"></ul>
+      </article>
+
+      <section class="shelf-wrap">
+        <div class="shelf-head">
+          <h2 id="count">Livres sur ta Kindle</h2>
+          <input type="search" id="search" placeholder="Chercher un livre" aria-label="Chercher un livre" hidden>
         </div>
+        <ul class="shelf" id="shelf"></ul>
+        <p class="empty" id="empty" hidden>Il n'y a encore aucun livre sur cette Kindle.</p>
+      </section>
+
+      <article class="step">
+        <h2>Étape 3 : quand tu as fini, débrancher</h2>
+        <p>Ne tire pas le câble tout de suite. Éjecte d'abord la Kindle :</p>
+        <div class="os">
+          <div>
+            <h3>Sur Windows</h3>
+            <ol class="todo">
+              <li>Ouvre l'Explorateur de fichiers (l'icône en forme de dossier jaune).</li>
+              <li>Fais un clic droit sur <strong>Kindle</strong>, dans la colonne de gauche.</li>
+              <li>Clique sur <strong>Éjecter</strong>.</li>
+            </ol>
+          </div>
+          <div>
+            <h3>Sur Mac</h3>
+            <ol class="todo">
+              <li>Ouvre le Finder.</li>
+              <li>Clique sur le petit triangle <strong>⏏</strong> à côté de <strong>Kindle</strong>.</li>
+            </ol>
+          </div>
+        </div>
+        <p>Débranche ensuite le câble. Les nouveaux livres apparaissent sur la Kindle après quelques secondes.</p>
+      </article>
+
+      <details class="help">
+        <summary>Réglages avancés</summary>
         <label class="format">
-          Format
+          Format des livres convertis
           <select id="format">
             <option value="kfx">KFX (recommandé)</option>
             <option value="azw3">AZW3</option>
           </select>
         </label>
-      </div>
-
-      <ul class="queue" id="queue" aria-live="polite"></ul>
-
-      <div class="shelf-head">
-        <h2 id="count">Bibliothèque</h2>
-        <div class="tools">
-          <input type="search" id="search" placeholder="Rechercher" aria-label="Rechercher un livre">
-          <button class="btn" id="refresh" type="button" title="Relire la Kindle">Actualiser</button>
-        </div>
-      </div>
-
-      <ul class="shelf" id="shelf"></ul>
-      <p class="empty" id="empty" hidden>Aucun livre sur cette Kindle pour l'instant.</p>
-
-      <p class="eject">Une fois terminé, <strong>éjecte la Kindle</strong> avant de la débrancher&nbsp;: elle indexe les nouveaux livres à ce moment-là.</p>
+        <button class="btn" id="refresh" type="button">Relire la liste des livres</button>
+      </details>
     </section>
   </main>
 
   <dialog id="rename-dialog">
     <form method="dialog" id="rename-form">
-      <h3>Renommer</h3>
-      <p class="hint" id="rename-hint">Le titre et l'auteur affichés sur la Kindle seront modifiés.</p>
+      <h3>Changer le titre</h3>
+      <p class="hint" id="rename-hint">La Kindle affichera ce titre et cet auteur.</p>
       <label>Titre <input name="title" required autocomplete="off"></label>
       <label id="rename-author-row">Auteur <input name="author" autocomplete="off"></label>
       <div class="actions">
@@ -121,8 +156,9 @@
   <div class="toast" id="toast" role="status" hidden></div>
 
   <footer class="foot">
-    Conversion par <a href="https://github.com/zacharydenton/boko" target="_blank" rel="noopener">boko</a>,
-    exécutée localement. Logiciel libre (GPL-3.0).
+    Les livres restent sur ton ordinateur : rien n'est envoyé sur internet.
+    Conversion par <a href="https://github.com/zacharydenton/boko" target="_blank" rel="noopener">boko</a>.
+    Logiciel libre (GPL-3.0).
   </footer>
 </body>
 </html>

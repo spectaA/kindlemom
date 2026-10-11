@@ -40,6 +40,7 @@ const ui = {
 const NATIVE = new Set(['kfx', 'azw3', 'azw', 'mobi', 'prc', 'pdf', 'txt']);
 /** Formats whose title lives inside the file (renamed through a conversion). */
 const EMBEDDED_META = new Set(['kfx', 'azw3', 'azw', 'mobi', 'prc', 'epub']);
+const UNSUPPORTED = "Ce fichier n'est pas un livre que la Kindle sait lire. Choisis un fichier qui finit par .epub.";
 
 let kindle = null;
 let books = [];
@@ -56,25 +57,26 @@ const prefs = {
   },
 };
 
-function formatSize(bytes) {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
-  return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} Mo`;
-}
-
 let toastTimer;
 function toast(message, isError = false) {
   ui.toast.textContent = message;
   ui.toast.classList.toggle('error', isError);
   ui.toast.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { ui.toast.hidden = true; }, isError ? 7000 : 3500);
+  toastTimer = setTimeout(() => { ui.toast.hidden = true; }, isError ? 10000 : 6000);
 }
 
 function errorText(e) {
-  if (e?.name === 'NotAllowedError') return "Accès refusé à la Kindle. Reconnecte-la et autorise la modification.";
-  if (e?.name === 'NotFoundError') return 'La Kindle semble débranchée. Rebranche-la puis reconnecte-la.';
-  if (e?.name === 'QuotaExceededError') return "Plus assez de place sur la Kindle.";
+  if (e?.name === 'NotAllowedError') return "La Kindle a refusé l'accès. Clique sur « Changer de Kindle », puis accepte quand Chrome demande la permission.";
+  if (e?.name === 'NotFoundError') return "La Kindle semble débranchée. Rebranche-la, puis clique sur « Changer de Kindle ».";
+  if (e?.name === 'QuotaExceededError') return "Il n'y a plus assez de place sur la Kindle. Supprime un livre déjà lu, puis réessaie.";
   return e?.message || String(e);
+}
+
+/** Conversion errors come from the engine in technical terms. */
+function bookErrorText(e) {
+  if (e?.name !== 'Error' || e.message === UNSUPPORTED) return errorText(e);
+  return `Ce livre n'a pas pu être préparé. Il est peut-être protégé contre la copie, ou abîmé. (${e.message})`;
 }
 
 function confirmAction({ title, text, ok = 'Confirmer', danger = true }) {
@@ -97,8 +99,8 @@ function askTitle(book) {
   fields.author.value = meta?.authors?.join(', ') || '';
   ui.renameAuthorRow.hidden = !embedded;
   ui.renameHint.textContent = embedded
-    ? 'Le titre et l’auteur affichés sur la Kindle seront modifiés.'
-    : 'Le nom du fichier sera modifié (c’est lui que la Kindle affiche).';
+    ? 'La Kindle affichera ce titre et cet auteur.'
+    : 'La Kindle affichera ce titre.';
   ui.renameDialog.returnValue = '';
   ui.renameDialog.showModal();
   fields.title.select();
@@ -151,7 +153,7 @@ async function reconnect() {
   const handle = await kvGet('device');
   if (!handle) return connect();
   try {
-    if (!(await permitted(handle, true))) return toast('Autorisation refusée.', true);
+    if (!(await permitted(handle, true))) return toast("Il faut accepter la permission pour continuer.", true);
     await useHandle(handle);
   } catch (e) {
     toast(errorText(e), true);
@@ -176,7 +178,6 @@ async function showReconnect() {
     ui.reconnectName.textContent = handle.name;
     ui.connect.textContent = 'Choisir une autre Kindle';
     ui.connect.classList.remove('primary');
-    ui.reconnect.classList.add('primary');
   }
 }
 
@@ -229,13 +230,16 @@ function render() {
     return `${b.name} ${meta?.title ?? ''} ${meta?.authors?.join(' ') ?? ''}`.toLowerCase().includes(query);
   });
   ui.count.innerHTML = '';
-  ui.count.append('Bibliothèque');
+  ui.count.append('Livres sur ta Kindle');
   const small = document.createElement('small');
-  small.textContent = `${books.length} livre${books.length > 1 ? 's' : ''}`;
+  small.textContent = `(${books.length})`;
   ui.count.append(small);
+  ui.search.hidden = books.length < SEARCH_FROM;
   ui.empty.hidden = books.length > 0;
   ui.shelf.replaceChildren(...shown.map(card));
 }
+
+const SEARCH_FROM = 12;
 
 const PALETTE = ['#2f3a4a', '#6b2f2a', '#36513f', '#5a4a2a', '#3e2f52', '#1d1a16', '#7a4b1f'];
 
@@ -251,29 +255,22 @@ function card(book) {
   li.dataset.path = book.path;
   li.innerHTML = `
     <div class="cover">
-      <span class="badge"></span>
       <div class="placeholder"><b></b><small></small></div>
     </div>
-    <div>
-      <p class="title"></p>
-      <p class="author"></p>
-      <span class="meta"></span>
-    </div>
+    <p class="title"></p>
+    <p class="author"></p>
+    <p class="unreadable" hidden>La Kindle ne peut pas encore ouvrir ce livre.</p>
     <div class="acts">
-      <button class="link convert" type="button" hidden>Convertir</button>
-      <button class="link rename" type="button">Renommer</button>
-      <button class="link replace" type="button">Remplacer</button>
-      <button class="link del" type="button">Supprimer</button>
+      <button class="btn primary small convert" type="button" hidden>Rendre lisible</button>
+      <button class="btn small rename" type="button">Changer le titre</button>
+      <button class="btn small del" type="button">Supprimer</button>
+      <button class="link replace" type="button">Remplacer par un autre fichier</button>
     </div>`;
-  const badge = li.querySelector('.badge');
-  badge.textContent = book.ext;
   if (book.ext === 'epub') {
-    badge.classList.add('warn');
-    badge.title = 'La Kindle ne lit pas les EPUB copiés en USB';
+    li.querySelector('.unreadable').hidden = false;
     li.querySelector('.convert').hidden = false;
   }
   li.querySelector('.placeholder').style.setProperty('--ph', PALETTE[hash(book.name) % PALETTE.length]);
-  li.querySelector('.meta').textContent = `${formatSize(book.size)} · ${new Date(book.modified).toLocaleDateString('fr-FR')}`;
   li.querySelector('.convert').onclick = () => convertInPlace(book);
   li.querySelector('.rename').onclick = () => rename(book);
   li.querySelector('.replace').onclick = () => replace(book);
@@ -370,25 +367,25 @@ async function install({ data, ext, fileName, replacing = null, meta = null, rep
   if (ext === 'epub' || meta) {
     let epub = data;
     if (ext !== 'epub') {
-      report.step('Lecture…');
+      report.step('Ouverture du livre…');
       epub = await engine.convert(data, ext, 'epub');
     }
     if (meta) epub = retitle(epub, { title: meta.title, author: meta.author });
     info = await engine.inspect(epub, 'epub');
     // A renamed KFX or AZW3 keeps its format; the rest goes to the chosen one.
     outExt = meta && (ext === 'kfx' || ext === 'azw3') ? ext : target;
-    report.step(`Conversion en ${outExt.toUpperCase()}…`);
+    report.step('Préparation pour la Kindle…');
     try {
       out = await engine.convert(epub, 'epub', outExt);
     } catch (e) {
       if (outExt !== 'kfx') throw e;
-      report.step('KFX impossible, conversion en AZW3…');
+      report.step('Préparation pour la Kindle (autre méthode)…');
       outExt = 'azw3';
       out = await engine.convert(epub, 'epub', 'azw3');
     }
     data = epub;
   } else if (!NATIVE.has(ext)) {
-    throw new Error('Format non pris en charge');
+    throw new Error(UNSUPPORTED);
   }
 
   const base = info
@@ -401,8 +398,8 @@ async function install({ data, ext, fileName, replacing = null, meta = null, rep
   if (replacing?.name !== name && await kindle.exists(dir, name)) {
     const existing = books.find((b) => b.dir === dir && b.name === name);
     const ok = await confirmAction({
-      title: 'Ce livre existe déjà',
-      text: `« ${name} » est déjà sur la Kindle. Le remplacer ?`,
+      title: 'Ce livre est déjà sur la Kindle',
+      text: `« ${name} » est déjà sur la Kindle. Mettre la nouvelle version à sa place ?`,
       ok: 'Remplacer',
     });
     if (!ok) return 'skipped';
@@ -438,23 +435,23 @@ async function addFiles(files) {
     const report = job(file.name);
     const ext = extOf(file.name);
     if (!engine.READABLE.has(ext) && !NATIVE.has(ext)) {
-      report.fail('Format non pris en charge (EPUB, KFX, AZW3, MOBI, PDF, TXT)');
+      report.fail(UNSUPPORTED);
       continue;
     }
     try {
-      report.step('Lecture…');
+      report.step('Ouverture du livre…');
       const data = new Uint8Array(await file.arrayBuffer());
       const result = await install({ data, ext, fileName: file.name, report });
-      if (result === 'skipped') report.done('Ignoré');
+      if (result === 'skipped') report.done('Pas ajouté');
       else {
-        report.done(ext === result ? 'Copié' : `Ajouté en ${result.toUpperCase()}`);
+        report.done('Ajouté ✓');
         added++;
       }
     } catch (e) {
-      report.fail(errorText(e));
+      report.fail(bookErrorText(e));
     }
   }
-  if (added) toast(`${added} livre${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''}. Pense à éjecter la Kindle.`);
+  if (added) toast(`${added} livre${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''}. Quand tu as fini, suis l'étape 3 pour débrancher.`);
   await refresh();
 }
 
@@ -462,14 +459,14 @@ async function remove(book) {
   const title = metaCache.get(book.path)?.title || stem(book.name);
   const ok = await confirmAction({
     title: 'Supprimer ce livre ?',
-    text: `« ${title} » sera effacé de la Kindle, avec sa position de lecture et ses notes.`,
+    text: `« ${title} » sera effacé de la Kindle. La page de lecture et les notes seront perdues aussi.`,
     ok: 'Supprimer',
   });
   if (!ok) return;
   setBusy(book, true);
   try {
     await kindle.removeBook(book);
-    toast('Livre supprimé.');
+    toast('Livre supprimé ✓');
   } catch (e) {
     toast(errorText(e), true);
   }
@@ -480,7 +477,7 @@ async function rename(book) {
   const answer = await askTitle(book);
   if (!answer?.title) return;
   setBusy(book, true);
-  const report = job(`Renommer : ${answer.title}`);
+  const report = job(`Nouveau titre : ${answer.title}`);
   try {
     if (EMBEDDED_META.has(book.ext)) {
       const data = await kindle.read(book);
@@ -489,12 +486,12 @@ async function rename(book) {
       const name = safeFileName(answer.title, book.ext);
       if (name !== book.name) {
         if (await kindle.exists(book.dir, name)) throw new Error(`« ${name} » existe déjà.`);
-        report.step('Copie…');
+        report.step('Copie sur la Kindle…');
         await kindle.write(book.dir, name, await book.handle.getFile());
         await kindle.removeBook(book);
       }
     }
-    report.done('Renommé');
+    report.done('Titre changé ✓');
   } catch (e) {
     report.fail(errorText(e));
   }
@@ -504,29 +501,29 @@ async function rename(book) {
 async function replace(book) {
   const file = await pickFile(ui.replaceInput);
   if (!file) return;
-  const report = job(`Remplacer par ${file.name}`);
+  const report = job(`Remplacement par ${file.name}`);
   setBusy(book, true);
   try {
     const ext = extOf(file.name);
     const data = new Uint8Array(await file.arrayBuffer());
     const result = await install({ data, ext, fileName: file.name, replacing: book, report });
-    report.done(result === 'skipped' ? 'Ignoré' : 'Remplacé');
+    report.done(result === 'skipped' ? 'Pas remplacé' : 'Remplacé ✓');
   } catch (e) {
-    report.fail(errorText(e));
+    report.fail(bookErrorText(e));
   }
   await refresh();
 }
 
 /** An EPUB copied by hand: convert it and swap it for the Kindle version. */
 async function convertInPlace(book) {
-  const report = job(`Convertir ${book.name}`);
+  const report = job(stem(book.name));
   setBusy(book, true);
   try {
     const data = await kindle.read(book);
     const result = await install({ data, ext: 'epub', fileName: book.name, replacing: book, report });
-    report.done(result === 'skipped' ? 'Ignoré' : `Converti en ${result.toUpperCase()}`);
+    report.done(result === 'skipped' ? 'Pas modifié' : 'Lisible sur la Kindle ✓');
   } catch (e) {
-    report.fail(errorText(e));
+    report.fail(bookErrorText(e));
   }
   await refresh();
 }
@@ -539,10 +536,7 @@ ui.disconnect.onclick = disconnect;
 ui.refresh.onclick = refresh;
 ui.search.oninput = render;
 ui.pick.onclick = (e) => { e.stopPropagation(); ui.fileInput.click(); };
-ui.drop.onclick = (e) => {
-  if (e.target.closest('select, label')) return;
-  ui.fileInput.click();
-};
+ui.drop.onclick = () => ui.fileInput.click();
 ui.fileInput.onchange = () => addFiles(ui.fileInput.files).finally(() => { ui.fileInput.value = ''; });
 
 ui.format.value = prefs.get('format', 'kfx');
@@ -568,7 +562,7 @@ window.addEventListener('drop', (e) => {
   dragDepth = 0;
   ui.drop.classList.remove('over');
   if (kindle) addFiles(e.dataTransfer.files);
-  else toast('Connecte d’abord ta Kindle.', true);
+  else toast("Fais d'abord l'étape 1 : choisir ta Kindle.", true);
 });
 
 // Start

@@ -95,9 +95,9 @@ export class Kindle {
     const documents = await childDir(root, 'documents');
     if (!documents) {
       if (root.name.toLowerCase() === 'documents') {
-        throw new Error('Tu as choisi le dossier « documents ». Choisis plutôt le disque Kindle lui-même (le niveau au-dessus).');
+        throw new Error('Tu as choisi le dossier « documents », qui est à l’intérieur de la Kindle. Recommence et clique sur « Kindle » lui-même.');
       }
-      throw new Error(`« ${root.name} » ne ressemble pas à une Kindle : pas de dossier « documents ».`);
+      throw new Error(`« ${root.name} » n’est pas une Kindle. Recommence et clique sur « Kindle » dans la colonne de gauche.`);
     }
     return new Kindle(root, documents);
   }
